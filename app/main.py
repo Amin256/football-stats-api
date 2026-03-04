@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 
 app = FastAPI(
-    title="Football Stats API",
-    description="REST API for football match statistics and analytics",
-    version="1.0"
+    title = "Football Stats API",
+    description = "REST API for football match statistics and analytics",
+    version = "1.0"
 )
 
 @app.get("/")

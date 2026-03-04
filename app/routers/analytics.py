@@ -74,3 +74,50 @@ def league_table(db: Session = Depends(get_db)):
     )
 
     return sorted_table
+
+@router.get("/analytics/top-scoring-teams")
+def top_scoring_teams(db: Session = Depends(get_db)):
+
+    teams = db.query(models.Team).all()
+    matches = db.query(models.Match).all()
+
+    goals = {team.id: {"team": team.name, "goals_scored": 0} for team in teams}
+
+    for match in matches:
+
+        if match.home_team_id in goals:
+            goals[match.home_team_id]["goals_scored"] += match.home_goals
+
+        if match.away_team_id in goals:
+            goals[match.away_team_id]["goals_scored"] += match.away_goals
+
+    sorted_goals = sorted(
+        goals.values(),
+        key=lambda x: x["goals_scored"],
+        reverse=True
+    )
+
+    return sorted_goals
+
+@router.get("/analytics/best-defence")
+def best_defence(db: Session = Depends(get_db)):
+
+    teams = db.query(models.Team).all()
+    matches = db.query(models.Match).all()
+    
+    defence = {team.id: {"team": team.name, "goals_conceded": 0} for team in teams}
+
+    for match in matches:
+
+        if match.home_team_id in defence:
+            defence[match.home_team_id]["goals_conceded"] += match.away_goals
+
+        if match.away_team_id in defence:
+            defence[match.away_team_id]["goals_conceded"] += match.home_goals
+
+    sorted_defence = sorted(
+        defence.values(),
+        key=lambda x: x["goals_conceded"]
+    )
+
+    return sorted_defence

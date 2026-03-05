@@ -35,7 +35,6 @@ def league_table(db: Session = Depends(get_db)):
         }
 
     for match in matches:
-
         home = table[match.home_team_id]
         away = table[match.away_team_id]
 
@@ -83,7 +82,6 @@ def top_scoring_teams(db: Session = Depends(get_db)):
     goals = {team.id: {"team": team.name, "goals_scored": 0} for team in teams}
 
     for match in matches:
-
         if match.home_team_id in goals:
             goals[match.home_team_id]["goals_scored"] += match.home_goals
 
@@ -107,7 +105,6 @@ def best_defence(db: Session = Depends(get_db)):
     defence = {team.id: {"team": team.name, "goals_conceded": 0} for team in teams}
 
     for match in matches:
-
         if match.home_team_id in defence:
             defence[match.home_team_id]["goals_conceded"] += match.away_goals
 
@@ -148,7 +145,6 @@ def team_form(team_id: int, db: Session = Depends(get_db)):
     points = 0
 
     for match in matches:
-
         if match.home_team_id == team_id:
             gf = match.home_goals
             ga = match.away_goals
@@ -174,4 +170,92 @@ def team_form(team_id: int, db: Session = Depends(get_db)):
         "points": points,
         "goals_for": goals_for,
         "goals_against": goals_against
+    }
+    
+@router.get("/analytics/home-away-performance/{team_id}")
+def home_away_performance(team_id: int, db: Session = Depends(get_db)):
+
+    team = db.query(models.Team).filter(models.Team.id == team_id).first()
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    matches = (
+        db.query(models.Match)
+        .filter(
+            or_(
+                models.Match.home_team_id == team_id,
+                models.Match.away_team_id == team_id
+            )
+        )
+        .all()
+    )
+
+    home_played = home_wins = home_draws = home_losses = 0
+    away_played = away_wins = away_draws = away_losses = 0
+
+    home_goals_for = home_goals_against = 0
+    away_goals_for = away_goals_against = 0
+
+    for match in matches:
+        if match.home_team_id == team_id:
+            home_played += 1
+            gf = match.home_goals
+            ga = match.away_goals
+
+            home_goals_for += gf
+            home_goals_against += ga
+
+            if gf > ga:
+                home_wins += 1
+            elif gf == ga:
+                home_draws += 1
+            else:
+                home_losses += 1
+
+        elif match.away_team_id == team_id:
+            away_played += 1
+            gf = match.away_goals
+            ga = match.home_goals
+
+            away_goals_for += gf
+            away_goals_against += ga
+
+            if gf > ga:
+                away_wins += 1
+            elif gf == ga:
+                away_draws += 1
+            else:
+                away_losses += 1
+
+    def safe_div(num: float, den: int) -> float:
+        return round(num / den, 3) if den else 0.0
+
+    return {
+        "team": team.name,
+        "home": {
+            "played": home_played,
+            "wins": home_wins,
+            "draws": home_draws,
+            "losses": home_losses,
+            "goals_for": home_goals_for,
+            "goals_against": home_goals_against,
+            "goal_difference": home_goals_for - home_goals_against,
+            "points": (home_wins * 3) + home_draws,
+            "avg_goals_for": safe_div(home_goals_for, home_played),
+            "avg_goals_against": safe_div(home_goals_against, home_played),
+            "win_rate": safe_div(home_wins, home_played),
+        },
+        "away": {
+            "played": away_played,
+            "wins": away_wins,
+            "draws": away_draws,
+            "losses": away_losses,
+            "goals_for": away_goals_for,
+            "goals_against": away_goals_against,
+            "goal_difference": away_goals_for - away_goals_against,
+            "points": (away_wins * 3) + away_draws,
+            "avg_goals_for": safe_div(away_goals_for, away_played),
+            "avg_goals_against": safe_div(away_goals_against, away_played),
+            "win_rate": safe_div(away_wins, away_played),
+        }
     }

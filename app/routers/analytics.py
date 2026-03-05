@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from ..database import SessionLocal
 from .. import models
 
 router = APIRouter()
-
 
 def get_db():
     db = SessionLocal()
@@ -12,7 +12,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
 
 @router.get("/analytics/league-table")
 def league_table(db: Session = Depends(get_db)):
@@ -121,3 +120,58 @@ def best_defence(db: Session = Depends(get_db)):
     )
 
     return sorted_defence
+
+@router.get("/team-form/{team_id}")
+def team_form(team_id: int, db: Session = Depends(get_db)):
+
+    team = db.query(models.Team).filter(models.Team.id == team_id).first()
+
+    if not team:
+        raise HTTPException(status_code = 404, detail = "Team not found")
+
+    matches = (
+        db.query(models.Match)
+        .filter(
+            or_(
+                models.Match.home_team_id == team_id,
+                models.Match.away_team_id == team_id
+            )
+        )
+        .order_by(models.Match.date.desc())
+        .limit(5)
+        .all()
+    )
+
+    results = []
+    goals_for = 0
+    goals_against = 0
+    points = 0
+
+    for match in matches:
+
+        if match.home_team_id == team_id:
+            gf = match.home_goals
+            ga = match.away_goals
+        else:
+            gf = match.away_goals
+            ga = match.home_goals
+
+        goals_for += gf
+        goals_against += ga
+
+        if gf > ga:
+            results.append("W")
+            points += 3
+        elif gf == ga:
+            results.append("D")
+            points += 1
+        else:
+            results.append("L")
+
+    return {
+        "team": team.name,
+        "last_5_results": results,
+        "points": points,
+        "goals_for": goals_for,
+        "goals_against": goals_against
+    }
